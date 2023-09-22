@@ -6,7 +6,7 @@
 Plugin Name: SameSite
 Plugin URI: https://wordpress.org/plugins/samesite
 Description: CSRF-protection for authentication cookies. When enabled, this plugin makes sure the "SameSite" flag is set in authentication cookies, which protects users from Cross-Site Request Forgery attacks.
-Version: 2.1
+Version: 2.2
 Author: Ayesh Karunaratne
 Author URI: https://aye.sh/open-source
 License: GPLv2 or later
@@ -136,19 +136,10 @@ function wp_set_auth_cookie( int $user_id, bool $remember = false, $secure = '',
 	 * Allows preventing auth cookies from actually being sent to the client.
 	 *
 	 * @since 4.7.4
-	 * @since 6.2.0 The `$expire`, `$expiration`, `$user_id`, `$scheme`, and `$token` parameters were added.
 	 *
 	 * @param bool   $send       Whether to send auth cookies to the client. Default true.
-	 * @param int    $expire     The time the login grace period expires as a UNIX timestamp.
-	 *                           Default is 12 hours past the cookie's expiration time. Zero when clearing cookies.
-	 * @param int    $expiration The time when the logged-in authentication cookie expires as a UNIX timestamp.
-	 *                           Default is 14 days from now. Zero when clearing cookies.
-	 * @param int    $user_id    User ID. Zero when clearing cookies.
-	 * @param string $scheme     Authentication scheme. Values include 'auth' or 'secure_auth'.
-	 *                           Empty string when clearing cookies.
-	 * @param string $token      User's session token to use for this cookie. Empty string when clearing cookies.
 	 */
-	if ( ! apply_filters( 'send_auth_cookies', true, $expire, $expiration, $user_id, $scheme, $token ) ) {
+	if ( ! apply_filters( 'send_auth_cookies', true ) ) {
 		return;
 	}
 
@@ -160,42 +151,12 @@ function wp_set_auth_cookie( int $user_id, bool $remember = false, $secure = '',
 		'samesite' => defined('WP_SAMESITE_COOKIE') ? WP_SAMESITE_COOKIE : 'Lax',
 	]; // httponly is added at samesite_setcookie();
 
-	samesite_setcookie( $auth_cookie_name, $auth_cookie, $base_options + ['secure' => $secure, 'path' => PLUGINS_COOKIE_PATH]);
-	samesite_setcookie( $auth_cookie_name, $auth_cookie, $base_options + ['secure' => $secure, 'path' => ADMIN_COOKIE_PATH]);
-	samesite_setcookie( LOGGED_IN_COOKIE, $logged_in_cookie, $base_options + ['secure' => $secure_logged_in_cookie, 'path' => COOKIEPATH]);
+	setcookie( $auth_cookie_name, $auth_cookie, $base_options + ['secure' => $secure, 'path' => PLUGINS_COOKIE_PATH]);
+	setcookie( $auth_cookie_name, $auth_cookie, $base_options + ['secure' => $secure, 'path' => ADMIN_COOKIE_PATH]);
+	setcookie( LOGGED_IN_COOKIE, $logged_in_cookie, $base_options + ['secure' => $secure_logged_in_cookie, 'path' => COOKIEPATH]);
 	if ( COOKIEPATH != SITECOOKIEPATH ) {
-		samesite_setcookie( LOGGED_IN_COOKIE, $logged_in_cookie, $base_options + ['secure' => $secure_logged_in_cookie, 'path' => SITECOOKIEPATH]);
+		setcookie( LOGGED_IN_COOKIE, $logged_in_cookie, $base_options + ['secure' => $secure_logged_in_cookie, 'path' => SITECOOKIEPATH]);
 	}
 }
 
 endif;
-
-/**
- * @internal Function to mimic setcookie() function behaviour without PHP 7.3 as
- *  as a requirement to set SameSite flag. This function does not handle exceptional
- *  cases well (to keep its functionality minimal); Do not use for any other purpose.
- * @param $name
- * @param $value
- * @param array $options
- */
-function samesite_setcookie($name, $value, array $options) {
-	$header = 'Set-Cookie:';
-	$header .= rawurlencode($name) . '=' . rawurlencode($value) . ';';
-
-	if (!empty($options['expires']) && $options['expires'] > 0) {
-		$header .= 'expires=' . \gmdate('D, d-M-Y H:i:s T', (int) $options['expires']) . ';';
-		$header .= 'Max-Age=' . max(0, (int) ($options['expires'] - time())) . ';';
-	}
-
-	$header .= 'path=' . rawurlencode($options['path']). ';';
-	$header .= 'domain=' . rawurlencode($options['domain']) . ';';
-
-	if (!empty($options['secure'])) {
-		$header .= 'secure;';
-	}
-	$header .= 'httponly;';
-	$header .= 'SameSite=' . rawurlencode($options['samesite']);
-
-	header($header, false);
-	$_COOKIE[$name] = $value;
-}
